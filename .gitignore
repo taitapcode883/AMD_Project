@@ -1,0 +1,20 @@
+# .NET build output
+bin/
+obj/
+
+# SQLite databases (mỗi máy tự sinh qua migration, không commit data)
+*.db
+*.db-shm
+*.db-wal
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+*.user
+
+# Node / Frontend
+node_modules/
+Frontend/dist/
+
+# macOS
+.DS_Store
