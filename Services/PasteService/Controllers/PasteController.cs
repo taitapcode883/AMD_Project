@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PasteService.Data;
 using PasteService.Models;
+using System.Text;
 
 namespace PasteService.Controllers
 {
@@ -29,66 +29,68 @@ namespace PasteService.Controllers
         }
 
         // GET: api/Paste/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Paste>> GetPaste(int id)
+        [HttpGet("{code}")]
+        public async Task<ActionResult<Paste>> GetPaste(string code)
         {
-            var paste = await _context.Pastes.FindAsync(id);
+            var paste = await _context.Pastes.FirstOrDefaultAsync(p => p.Code == code);
 
             if (paste == null)
             {
                 return NotFound();
             }
 
+            paste.ViewCount++;
+            await _context.SaveChangesAsync();
+
             return paste;
-        }
-
-        // PUT: api/Paste/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutPaste(int id, Paste paste)
-        {
-            if (id != paste.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(paste).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!PasteExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
         }
 
         // POST: api/Paste
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Paste>> PostPaste(Paste paste)
+        public async Task<ActionResult<Paste>> PostPaste(CreatePasteRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.Content))
+            {
+                return BadRequest("Content cannot be empty.");
+            }
+            if (Encoding.UTF8.GetByteCount(request.Content) > 500 * 1024)
+            {
+                return BadRequest("Content exceeds the maximum allowed size of 500 KB.");
+            }
+            DateTime? expiresAt = request.Expiry switch
+            {
+                "1h" => DateTime.UtcNow.AddHours(1),
+                "1d" => DateTime.UtcNow.AddDays(1),
+                "1w" => DateTime.UtcNow.AddDays(7),
+                _ => null,
+            };
+            string code;
+            do
+            {
+                code = GenerateCode();
+            } while (await _context.Pastes.AnyAsync(p => p.Code == code));
+
+            var paste = new Paste
+            {
+                Code = code,
+                Content = request.Content,
+                Language = request.Language,
+                Visibility = request.Visibility,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = expiresAt
+            };
             _context.Pastes.Add(paste);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetPaste", new { id = paste.Id }, paste);
+            return CreatedAtAction("GetPaste", new { code = paste.Code }, paste);
         }
 
         // DELETE: api/Paste/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeletePaste(int id)
+        [HttpDelete("{code}")]
+        public async Task<IActionResult> DeletePaste(string code)
         {
-            var paste = await _context.Pastes.FindAsync(id);
+            var paste = await _context.Pastes.FirstOrDefaultAsync(p => p.Code == code);
             if (paste == null)
             {
                 return NotFound();
@@ -100,9 +102,29 @@ namespace PasteService.Controllers
             return NoContent();
         }
 
-        private bool PasteExists(int id)
+        private static string GenerateCode(int length = 8)
         {
-            return _context.Pastes.Any(e => e.Id == id);
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            var random = new Random();
+            var codeChars = new char[length];
+
+            for(int i = 0; i < length; i++)
+            {
+                codeChars[i] = chars[random.Next(chars.Length)];
+            }
+
+            return new string(codeChars);
         }
     }
+
+    public class CreatePasteRequest
+{
+    public string Content {get; set;}
+    public string Language {get; set;}
+    public string Visibility{get; set;}
+    public string Expiry {get; set;}
+    
 }
+}
+
+

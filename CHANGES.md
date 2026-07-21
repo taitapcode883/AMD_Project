@@ -97,3 +97,34 @@ PastebinProject/
 3. Background job xoá paste hết hạn.
 4. `.gitignore` + đưa project vào Git (`PastebinProject/` vẫn untracked).
 5. Frontend, Docker, CI/CD, unit test, README — chưa bắt đầu.
+
+---
+
+## 2026-07-21 (khuya) — Đẩy repo lên GitHub, viết lại `PasteController` thật
+
+**Lý do:** Phân công lại vai trò trong nhóm BE — 1 bạn phụ trách `PasteService`, tự tay viết lại toàn bộ Controller theo hướng dẫn giải thích từng dòng (không viết hộ), đồng thời đưa code lên GitHub để cả nhóm cùng thấy.
+
+### Git / GitHub
+- Repo `PastebinProject/` giờ là git repo **riêng, độc lập** với repo `amd201` bên ngoài (repo mẫu của giảng viên, không liên quan).
+- Thêm `.gitignore` gốc (`bin/`, `obj/`, `*.db`, `node_modules/`, `.vs/`, `.DS_Store`...).
+- Commit đầu tiên (52 file) đã push lên `https://github.com/taitapcode883/AMD_Project`, branch `main`.
+
+### PasteService — `PasteController.cs` viết lại hoàn chỉnh (khớp API contract)
+- `GetPaste`/`DeletePaste`: đổi tra cứu từ `int id` → `string code` (dùng `FirstOrDefaultAsync(p => p.Code == code)` thay vì `FindAsync`, vì `Code` không phải khoá chính).
+- Xoá hẳn `PutPaste` (không có trong API contract, đề bài không yêu cầu sửa paste) và hàm `PasteExists` đi kèm (chỉ được `PutPaste` gọi, thành code chết sau khi xoá).
+- Thêm `CreatePasteRequest` (class request riêng, đặt cạnh `PasteController` trong cùng namespace `PasteService.Controllers`, không tách thư mục DTOs — giữ đúng style tối giản của thầy): `Content`, `Language`, `Visibility`, `Expiry` (chuỗi thô `"1h"/"1d"/"1w"/"never"`, khác với `ExpiresAt` đã tính cụ thể lưu trong entity `Paste`).
+- Thêm hàm `GenerateCode(int length = 8)`: sinh mã ngẫu nhiên 8 ký tự (chữ hoa/thường/số), dùng làm định danh công khai cho URL — tách biệt với `Id` (khoá nội bộ, tăng dần, không lộ ra ngoài để tránh bị dò URL tuần tự).
+- `PostPaste(CreatePasteRequest request)` viết lại hoàn chỉnh:
+  - Validate `Content` không rỗng (`string.IsNullOrWhiteSpace`) và không vượt 500KB (đếm byte thật qua `Encoding.UTF8.GetByteCount`, không dùng `.Length` vì ký tự tiếng Việt/Unicode chiếm nhiều hơn 1 byte khi mã hoá UTF-8).
+  - Tính `ExpiresAt` từ `request.Expiry` bằng `switch` expression (`"1h"` → `+1 giờ`, `"1d"` → `+1 ngày`, `"1w"` → `+7 ngày`, còn lại/`"never"` → `null`).
+  - Gọi `GenerateCode()` trong vòng `do-while`, kiểm tra trùng qua `AnyAsync` trước khi nhận mã, đảm bảo `Code` luôn duy nhất.
+  - Tạo `Paste` mới bằng object initializer, lưu DB, trả `201 Created` kèm `Location` trỏ đúng `GetPaste` theo `code`.
+- `GetPaste`: thêm `paste.ViewCount++` + `SaveChangesAsync()` sau khi tìm thấy paste — tăng lượt xem mỗi lần gọi thành công. Đã giải thích khái niệm **change tracking** của EF Core (vì `paste` lấy trực tiếp từ `_context` nên không cần gọi `Entry(paste).State = Modified` như cách cũ).
+- Build sạch, 0 lỗi (chỉ còn cảnh báo `CS8618` nullable có từ đầu, không phải lỗi mới).
+
+### Việc cần làm tiếp theo (chưa làm)
+1. `AuthController` thật (`Register`/`Login`, hash + JWT) — package đã cài (`BCrypt.Net-Next`, `JwtBearer`), chưa viết logic.
+2. `PasteController.GetMine` (`GET /pastes/mine`) — cần JWT xong bên AuthService mới đọc được `OwnerId` từ token.
+3. Kiểm tra `Visibility == "private"` phải yêu cầu đăng nhập ở `GetPaste` — cũng phụ thuộc JWT.
+4. Background job xoá paste hết hạn (`BackgroundService`).
+5. Frontend, Docker, CI/CD, unit test, README — chưa bắt đầu.
