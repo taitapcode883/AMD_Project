@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($bytes = New-Object byte[] 64; \\(New-Object Security.Cryptography.RNGCryptoServiceProvider\\).GetBytes\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))",
+      "PowerShell(dotnet build *)",
+      "PowerShell(dotnet ef migrations *)",
+      "PowerShell(dotnet ef database *)"
+    ]
+  }
+}
