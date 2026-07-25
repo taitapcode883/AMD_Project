@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore;
 using PasteService.Data;
 using PasteService.Models;
 using System.Text;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.Authorization;
 
 namespace PasteService.Controllers
 {
@@ -46,10 +49,36 @@ namespace PasteService.Controllers
                 return NotFound();
             }
 
+            if (paste.Visibility == "private")
+            {
+                if (User.Identity?.IsAuthenticated != true)
+                {
+                    return Unauthorized();
+                }
+
+                var currentUserId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+                if (paste.OwnerId != currentUserId)
+                {
+                    return Forbid();
+                }
+            }
+
             paste.ViewCount++;
             await _context.SaveChangesAsync();
 
             return paste;
+        }
+
+        // GET: api/Paste/mine
+        [Authorize]
+        [HttpGet("mine")]
+        public async Task<ActionResult<IEnumerable<Paste>>> GetMine()
+        {
+            var currentUserId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+
+            return await _context.Pastes
+                .Where(p => p.OwnerId == currentUserId)
+                .ToListAsync();
         }
 
         // POST: api/Paste
@@ -78,6 +107,12 @@ namespace PasteService.Controllers
                 code = GenerateCode();
             } while (await _context.Pastes.AnyAsync(p => p.Code == code));
 
+            int? ownerId = null;
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                ownerId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+            }
+
             var paste = new Paste
             {
                 Code = code,
@@ -85,7 +120,8 @@ namespace PasteService.Controllers
                 Language = request.Language,
                 Visibility = request.Visibility,
                 CreatedAt = DateTime.UtcNow,
-                ExpiresAt = expiresAt
+                ExpiresAt = expiresAt,
+                OwnerId = ownerId
             };
             _context.Pastes.Add(paste);
             await _context.SaveChangesAsync();
@@ -101,6 +137,20 @@ namespace PasteService.Controllers
             if (paste == null)
             {
                 return NotFound();
+            }
+
+            if (paste.OwnerId.HasValue)
+            {
+                if(User.Identity?.IsAuthenticated != true)
+                {
+                    return Unauthorized();
+                }
+
+                var currentUserId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+                if (paste.OwnerId != currentUserId)
+                {
+                    return Forbid();
+                }
             }
 
             _context.Pastes.Remove(paste);
