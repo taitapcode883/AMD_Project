@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PasteService;
 using PasteService.Data;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -29,6 +30,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddHostedService<ExpiredPasteCleanupService>();
 
 var app = builder.Build();
 
