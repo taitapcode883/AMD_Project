@@ -117,7 +117,7 @@ namespace PasteService.Controllers
             _context.Pastes.Add(paste);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetPaste", new { code = paste.Code }, paste);
+            return CreatedAtAction(nameof(GetPaste), new { code = paste.Code }, paste);
         }
 
         // DELETE: api/Paste/5
@@ -166,13 +166,12 @@ namespace PasteService.Controllers
     }
 
     public class CreatePasteRequest
-{
-    public string Content {get; set;}
-    public string Language {get; set;}
-    public string Visibility{get; set;}
-    public string Expiry {get; set;}
-    
-}
+    {
+        public string Content { get; set; }
+        public string Language { get; set; }
+        public string Visibility { get; set; }
+        public string Expiry { get; set; }
+    }
 }
 
 
