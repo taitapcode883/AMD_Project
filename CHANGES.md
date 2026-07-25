@@ -128,3 +128,51 @@ PastebinProject/
 3. Kiểm tra `Visibility == "private"` phải yêu cầu đăng nhập ở `GetPaste` — cũng phụ thuộc JWT.
 4. Background job xoá paste hết hạn (`BackgroundService`).
 5. Frontend, Docker, CI/CD, unit test, README — chưa bắt đầu.
+
+---
+
+## 2026-07-25 — Gộp branch `authservice`, hoàn thiện `PasteController` (JWT, GetMine, quyền), background job, rotate JWT key
+
+**Lý do:** Bạn cùng nhóm phụ trách `AuthService` đã viết xong `Register`/`Login`/`Refresh`/`Logout` thật (kèm JWT + refresh token rotation) và push lên branch riêng `authservice` — nhưng branch đó tạo bằng `git init` độc lập, không chung lịch sử với `paste-service`. Cần gộp lại để `PasteService` dùng được JWT thật, hoàn thành nốt 3 việc TODO còn treo từ bữa trước (`GetMine`, check `private`, check quyền xoá) và bổ sung background job xoá paste hết hạn.
+
+### Rà soát `PasteController.cs` trước khi gộp
+- Phát hiện `GetPaste` không chặn paste đã hết hạn (`ExpiresAt`), `GetPastes` liệt kê cả paste hết hạn lẫn `private` — lỗ hổng lộ dữ liệu, không nằm trong TODO cũ nhưng cần vá ngay vì độc lập với JWT.
+- Vá bằng cách thêm điều kiện so `ExpiresAt` với `DateTime.UtcNow` ở cả 2 action (`GetPaste` trả `404` nếu hết hạn, `GetPastes` lọc bằng `.Where(...)` ngay trong query EF Core).
+- Build sạch, commit `5c8bf68`.
+
+### Rà soát branch `authservice` (code của bạn cùng nhóm)
+- `AuthController.cs` đã có `Register` (BCrypt hash + check trùng email), `Login` (verify + sinh JWT + refresh token), `Refresh` (rotation: thu hồi token cũ, cấp token mới), `Logout` (thu hồi refresh token), `Me` (`[Authorize]`, test token).
+- 2 vấn đề nhỏ ghi nhận lại, **chưa sửa** (không phải việc của mình, để bạn đó tự quyết): `Register` dùng `CreatedAtAction(nameof(Register), ...)` sai (không có action `GET` nào khớp để trỏ `Location` tới); không có unique index cho `Email` ở DB, chỉ check bằng `AnyAsync` ở tầng code (race condition lý thuyết).
+- Phát hiện vấn đề bảo mật: `Jwt:Key` bị commit thẳng dạng plaintext trong `Services/AuthService/appsettings.json`, đã push lên GitHub — coi như đã lộ, cần rotate (xử lý ở phần dưới).
+
+### Merge `authservice` vào `paste-service`
+- 2 branch không có common ancestor (`git merge-base` báo lỗi) → phải dùng `git merge --allow-unrelated-histories`.
+- Làm thử trên branch tạm `merge-auth-paste` trước (không đụng `paste-service` cho đến khi duyệt xong) — trong 47 file trùng tên giữa 2 branch, chỉ 8 file thật sự conflict (còn lại giống hệt, tự merge sạch): `CHANGES.md`, `AuthService.http`, `AuthController.cs`, `AppDbContext.cs` (AuthService), `AppDbContextModelSnapshot.cs`, `Program.cs` (AuthService), `appsettings.json` (AuthService), `PasteController.cs`.
+- Cách giải quyết từng conflict: các file AuthService → giữ bản `authservice` (bản thật, bên `paste-service` chỉ có bản scaffold cũ do chưa ai động tới); `PasteController.cs` → giữ bản `paste-service` (bản `authservice` chỉ là snapshot cũ trước khi viết lại); `CHANGES.md` → gộp tay, giữ nguyên nội dung `paste-service` (bên kia không có gì mới hơn để mất).
+- Build sạch sau merge → thay `paste-service` trỏ thẳng vào commit merge này (`git branch -f`), xoá branch tạm. Verify bằng `git diff` xác nhận `Services/PasteService/` không đổi 1 dòng nào so với trước merge. Commit merge `dfa3246`.
+
+### `PasteService` — wire JWT + hoàn thành TODO còn lại
+- Cài package `Microsoft.AspNetCore.Authentication.JwtBearer`, thêm section `Jwt` (`Key`/`Issuer`/`Audience`, khớp với `AuthService`) vào `appsettings.json`.
+- `Program.cs`: thêm `AddAuthentication().AddJwtBearer(...)` với `MapInboundClaims = false` (khớp bên AuthService, nếu không claim `sub` sẽ bị đổi tên tự động, đọc `OwnerId` sau này sẽ ra `null`), `AddAuthorization()`, và **`app.UseAuthentication()` trước `app.UseAuthorization()`** (thiếu bước này thì `[Authorize]` luôn trả 401 dù token đúng — đã tự bắt lỗi này lúc build/test).
+- `GetPaste`: thêm chặn `Visibility == "private"` — không đăng nhập → `401`, đăng nhập nhưng không phải chủ → `403 Forbid`.
+- `PostPaste`: gán `OwnerId` từ claim `sub` trong token nếu người tạo đã đăng nhập; vẫn cho tạo ẩn danh nếu không có token (giữ đúng thiết kế `OwnerId` nullable).
+- `DeletePaste`: paste có `OwnerId` → chỉ đúng chủ mới xoá được (401/403 tương tự); paste ẩn danh (`OwnerId == null`) → giữ hành vi cũ, ai biết `code` cũng xoá được (không ai chứng minh được quyền sở hữu qua token cho loại paste này).
+- Thêm `GetMine` (`[Authorize]`, `GET api/Paste/mine`) — trả các paste có `OwnerId` khớp user hiện tại.
+- Build sạch, commit `0412418`.
+
+### Background job xoá paste hết hạn
+- Thêm `ExpiredPasteCleanupService : BackgroundService` (`Services/PasteService/ExpiredPasteCleanupService.cs`) — vòng lặp mỗi 10 phút, xoá thẳng bằng `ExecuteDeleteAsync` (EF Core dịch thành 1 câu `DELETE` chạy trên DB, không tải entity vào bộ nhớ).
+- Vì `AppDbContext` là Scoped còn `BackgroundService` chạy Singleton, không inject thẳng được — phải inject `IServiceProvider`, tự tạo `IServiceScope` mỗi vòng lặp để lấy `AppDbContext` tươi.
+- Đăng ký `builder.Services.AddHostedService<ExpiredPasteCleanupService>()` trong `Program.cs` — phải thêm `using PasteService;` (namespace gốc project không tự động có sẵn trong file top-level statements như `System`/`Microsoft.AspNetCore.*` qua `ImplicitUsings`).
+- Build sạch, commit `7160205`.
+
+### Rotate `Jwt:Key`
+- Khoá cũ đã lộ plaintext trên GitHub từ trước — sinh khoá mới 64 byte ngẫu nhiên bằng `openssl rand -base64 64`.
+- Cập nhật ở `authservice` (`Services/AuthService/appsettings.json`, commit `273e938`), rồi đồng bộ đúng khoá đó sang cả `Services/AuthService/appsettings.json` **và** `Services/PasteService/appsettings.json` bên `paste-service` (commit `2a9e432`) — bắt buộc đồng bộ cả 2 chỗ vì AuthService ký / PasteService verify dùng chung 1 khoá, lệch nhau là JWT vỡ hoàn toàn (mọi request có `[Authorize]` đều bị từ chối).
+- Đã push cả `authservice` và `paste-service` lên GitHub. Lưu ý: rotate chỉ chặn được việc dùng khoá cũ **từ giờ trở đi** — khoá cũ vẫn còn nằm trong lịch sử Git đã push trước đó, không tự xoá được trừ khi rewrite history (chưa làm, rủi ro cao, cần bàn với cả nhóm trước nếu muốn làm).
+
+### Việc cần làm tiếp theo (chưa làm)
+1. Sửa `CreatedAtAction` sai trong `AuthController.Register` (branch `authservice`).
+2. Cân nhắc thêm unique index cho `User.Email` ở DB.
+3. Bạn phụ trách AuthService cần `git pull` branch `authservice` trước khi push tiếp (đã có commit rotate key mới trên đó).
+4. Frontend, Docker, CI/CD, unit test, README — chưa bắt đầu.
