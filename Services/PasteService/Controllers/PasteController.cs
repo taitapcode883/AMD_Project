@@ -25,7 +25,9 @@ namespace PasteService.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Paste>>> GetPastes()
         {
-            return await _context.Pastes.ToListAsync();
+            return await _context.Pastes
+                .Where(p => p.ExpiresAt == null || p.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
         }
 
         // GET: api/Paste/5
@@ -35,6 +37,11 @@ namespace PasteService.Controllers
             var paste = await _context.Pastes.FirstOrDefaultAsync(p => p.Code == code);
 
             if (paste == null)
+            {
+                return NotFound();
+            }
+
+            if (paste.ExpiresAt.HasValue && paste.ExpiresAt.Value < DateTime.UtcNow)
             {
                 return NotFound();
             }
