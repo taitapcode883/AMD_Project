@@ -97,3 +97,28 @@ PastebinProject/
 3. Background job xoá paste hết hạn.
 4. `.gitignore` + đưa project vào Git (`PastebinProject/` vẫn untracked).
 5. Frontend, Docker, CI/CD, unit test, README — chưa bắt đầu.
+
+---
+
+## 2026-07-25 — Sửa PasteService (migrate + endpoint `/mine`), chuyển `Jwt:Key` khỏi appsettings.json
+
+**Lý do:** Kiểm tra 3 service chạy thật (build + gọi qua Gateway) thì phát hiện `PasteService` lỗi 500 ở mọi request chạm DB, và `Jwt:Key` đang nằm plaintext trong file commit lên Git — đúng kiểu lỗi đã từng khiến key trước đó bị coi là lộ và phải rotate.
+
+### PasteService
+- `Program.cs` chưa từng gọi `Database.Migrate()` lúc khởi động (khác `AuthService`) → dù đã có migration `InitialCreate`, `paste.db` không bao giờ được tạo bảng `Pastes` → mọi query ném `SqliteException: no such table: Pastes`. Đã thêm `Database.Migrate()` giống `AuthService`.
+- `ocelot.json` route `GET /pastes/mine` → `GET /api/Paste/mine`, nhưng controller không có action nào tên `mine` → bị `{code}` route nuốt mất, chạy `GetPaste(code: "mine")` rồi crash. Đã thêm `[Authorize] GetMine()` lọc theo `OwnerId` lấy từ claim `sub` trong JWT.
+- Vì cần xác thực JWT ở `PasteService` để biết "mine" là của ai, đã thêm `AddAuthentication().AddJwtBearer(...)` giống hệt cấu hình bên `AuthService` (cùng `Key`/`Issuer`/`Audience` để token do `AuthService` phát hành verify được ở đây).
+- `PostPaste` giờ gán `OwnerId` từ claim khi request có token hợp lệ; vẫn cho tạo paste ẩn danh nếu không có token.
+- Test lại full flow qua Gateway: register → login → tạo paste (có token) → `GET /pastes/mine` (200 khi có token, 401 khi không) → `GET /pastes/{code}` (200, `viewCount` tăng đúng).
+
+### Bảo mật: `Jwt:Key`
+- Phát hiện nhánh `authservice` trên remote đã có commit rotate `Jwt:Key` từ trước (`273e938`, lý do: key cũ bị lộ plaintext trên GitHub) — nhưng key mới đó **vẫn** đang nằm plaintext trong `appsettings.json`, chỉ là giá trị khác. Cùng một vấn đề, chưa xử lý gốc.
+- Xử lý gốc: sinh key mới (64 byte random, không tái dùng key nào từng bị commit), lưu bằng `dotnet user-secrets` (`AuthService` và `PasteService`, mỗi project một `UserSecretsId` riêng trong `.csproj`) — secret nằm ngoài repo, chỉ trên máy dev.
+- Xoá `Jwt:Key` khỏi cả hai `appsettings.json` (chỉ còn `Issuer`/`Audience`, không phải secret).
+- Thêm guard fail-fast ở cả hai `Program.cs`: throw `InvalidOperationException` rõ ràng nếu `Jwt:Key` rỗng, thay vì `NullReferenceException` mù mờ lúc runtime.
+- **Lưu ý cho cả nhóm:** key mới không còn trong Git nữa — ai clone máy mới phải tự set lại bằng `dotnet user-secrets set "Jwt:Key" "<value>"` ở cả 2 project (giá trị lấy từ người đã có, gửi qua kênh riêng, không paste vào chat công khai/commit). Môi trường ngoài dev (nếu deploy sau này) dùng biến môi trường `Jwt__Key`.
+
+### Việc cần làm tiếp theo (chưa làm)
+1. Background job xoá paste hết hạn.
+2. Frontend, Docker, CI/CD, unit test, README — chưa bắt đầu.
+3. Cân nhắc rewrite lịch sử Git để xoá hẳn key cũ khỏi các commit trước (hiện chỉ ngừng commit key mới, các key cũ vẫn còn trong history) — cần cả nhóm đồng ý trước khi làm vì force-push sẽ ảnh hưởng tới máy người khác.
