@@ -24,15 +24,6 @@ namespace PasteService.Controllers
             _context = context;
         }
 
-        // GET: api/Paste
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Paste>>> GetPastes()
-        {
-            return await _context.Pastes
-                .Where(p => p.ExpiresAt == null || p.ExpiresAt > DateTime.UtcNow)
-                .ToListAsync();
-        }
-
         // GET: api/Paste/5
         [HttpGet("{code}")]
         public async Task<ActionResult<Paste>> GetPaste(string code)
