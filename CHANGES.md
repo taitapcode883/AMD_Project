@@ -176,3 +176,51 @@ PastebinProject/
 2. Cân nhắc thêm unique index cho `User.Email` ở DB.
 3. Bạn phụ trách AuthService cần `git pull` branch `authservice` trước khi push tiếp (đã có commit rotate key mới trên đó).
 4. Frontend, Docker, CI/CD, unit test, README — chưa bắt đầu.
+
+---
+
+## 2026-07-28 — Hoàn thiện route ApiGateway, test end-to-end qua Postman, gộp có chọn lọc `frontend`/`authservice`, thêm CORS
+
+**Lý do:** `ocelot.json` mới chỉ có route `register`/`login`/4 route paste, thiếu 3 action AuthService đã có sẵn (`refresh`/`logout`/`me`). Đồng thời 2 bạn cùng nhóm đã push thêm vào `frontend` (UI hoàn chỉnh) và `authservice` (unique index, đổi cách quản lý `Jwt:Key`) — cần lấy về nhưng không được đè mất `PasteService` đã viết.
+
+### ApiGateway — bổ sung route còn thiếu
+- Tự viết thêm 3 route vào `ocelot.json` theo mẫu route `login`/`register` có sẵn: `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`.
+- Bug tự phát hiện lúc viết: route `/auth/me` gõ nhầm `UpstreamHttpMethod: ["Post"]` trong khi `AuthController.Me()` là `[HttpGet("me")]` — sửa lại thành `"Get"`, nếu không Gateway trả `404`/`405` cho mọi request `GET /auth/me`.
+- Commit `68a4451`.
+
+### Test end-to-end qua Postman (cả 3 service chạy song song: Gateway `:5179`, AuthService `:5279`, PasteService `:5065`)
+- Set up collection với biến `base_url`, `access_token`, `refresh_token`, `paste_code` + script `Post-response` tự lưu token sau mỗi lần login/refresh — tránh copy tay.
+- Xác nhận toàn bộ luồng chạy đúng qua Gateway: `register` (201) → `login` (200) → `me` (200, cần đúng Bearer token) → `refresh` (200, rotation — token cũ dùng lại bị `401`) → `logout` (204) → `pastes` create/get/mine/delete (201/200/200/204).
+- Debug 2 lỗi thao tác Postman gặp phải (không phải lỗi code): biến `base_url` bị dư dấu `/` cuối gây `//auth/me` → `404`; URL `login` dính khoảng trắng thừa ở cuối (`%20`) → `404`. Dùng Postman Console (`View → Show Postman Console`) để soi request thật gửi đi, phát hiện ra 2 lỗi này.
+
+### Gộp có chọn lọc từ nhánh nhóm (không merge nguyên branch)
+- `git fetch` phát hiện nhánh `frontend` mới (`origin/frontend`) và `authservice` có thêm 3 commit — cả 3 đứng tên tác giả `taitapcode883` (trùng git identity với user hiện tại, cần xác nhận lại với bạn AuthService xem có dùng chung máy/account không).
+- **`frontend`**: merge thẳng, sạch, không conflict (chỉ đụng `Frontend/`, không đụng `Services/`/`ApiGateway/`). Commit merge `4a1139d`.
+- **`authservice`**: KHÔNG merge nguyên branch — trong 3 commit mới có 1 commit (`5e4b775`) viết lại luôn cả `PasteController.cs`/`Program.cs` bên PasteService bằng bản **cũ hơn, kém hơn** bản đang có (thiếu check `private`/ownership). Thử `git cherry-pick` thấy conflict đúng như dự đoán ở `PasteController.cs`/`Program.cs`/`appsettings.json` → `git cherry-pick --abort`, `git reset --hard` về trạng thái sạch.
+- Thay vào đó lấy tay từng file AuthService-only bằng `git show <commit>:<path> > <path>` (không đụng gì bên PasteService): `AuthController.cs`, `AppDbContext.cs`, 2 file migration `AddUniqueEmailIndex` — mang lại unique index DB cho `User.Email` + trả `409 Conflict` ở tầng DB (`catch (DbUpdateException)`) thay vì chỉ check `AnyAsync` như cũ. Build lại `AuthService` xác nhận sạch trước khi commit `0ffe74f`.
+- **Chủ động bỏ qua** 1 phần khác của `authservice` (commit `e25ae05`): đổi `Jwt:Key` từ `appsettings.json` sang `dotnet user-secrets` — user-secrets là local trên máy, không đồng bộ qua git, lấy vào sẽ làm AuthService không khởi động được (thiếu key) trên máy khác ngoài máy người tạo ra thay đổi đó. Còn treo trên `origin/authservice`, chưa merge, cần bàn với team cách chia sẻ key an toàn hơn (ví dụ file `.env`/`appsettings.Local.json` thêm vào `.gitignore`).
+- Nhân tiện kiểm tra lại thấy bug `CreatedAtAction(nameof(Register), ...)` sai (ghi nhận từ 2026-07-25, mục TODO #1) **đã được teammate tự sửa** trong chính commit `5e4b775` (nay đổi thành `StatusCode(StatusCodes.Status201Created, response)`) — lấy về cùng lúc với phần unique index, không cần sửa tay nữa.
+
+### Rà soát toàn bộ hệ thống để tìm việc còn thiếu trước khi "thành web hoàn chỉnh"
+Phát hiện Backend (3 service) đã ổn định, nhưng `Frontend/` mới chỉ là UI, **chưa nối API thật**:
+- `Login.vue`/`Register.vue`: không gọi `POST /auth/login`/`register` — chỉ đọc/ghi `localStorage` giả lập, không có JWT nào được lưu ở bất kỳ đâu trong Frontend.
+- `Dashboard.vue`: `pastes` là mảng hardcode cứng trong code, không gọi `GET /pastes/mine`.
+- `PasteEditor.vue`: bug thật — gửi field `expiresAt` (tính sẵn ISO date ở client) nhưng `CreatePasteRequest` bên backend chỉ đọc field `Expiry` (`"1h"/"1d"/"1w"`) → paste tạo từ Frontend **không bao giờ hết hạn** dù chọn gì trên UI. Chưa sửa (thuộc code FE, không phải phần mình).
+- `vite.config.js` chỉ proxy `/pastes`, thiếu `/auth/*`; không có `.env`/`VITE_API_URL` — sẽ vỡ khi `vite build` production (hết dev-server để proxy).
+
+### ApiGateway — thêm CORS
+- Thêm `AddCors`/`UseCors("Frontend")` (origin `http://localhost:5173`, đúng port mặc định Vite dev) vào `Program.cs`, đặt `UseCors` trước `UseOcelot()` (bắt buộc theo thứ tự middleware, nếu không header CORS không kịp gắn vào response). Verify bằng `curl -X OPTIONS` giả lập preflight — nhận đủ 3 header `Access-Control-Allow-*`.
+- Lý do cần: hiện `/pastes` "gọi được" từ Frontend chỉ nhờ proxy dev-server của Vite (né CORS vì browser thấy same-origin), nhưng cách đó không có rule cho `/auth/*` và không hoạt động ở bản build production. Thêm CORS ở Gateway giải quyết tận gốc, không phụ thuộc dev-server.
+- Commit `c4b3748`.
+
+### Trạng thái cuối ngày
+- `paste-service` đã có đủ: PasteService (của mình) + AuthController thật (đã lấy phần cải tiến) + Frontend UI (chưa nối API) + ApiGateway đủ route + CORS. Tất cả đã push lên `origin/paste-service`.
+- Backend (AuthService/PasteService/ApiGateway) coi như xong việc, đã test qua Postman.
+- Việc chặn "web hoàn chỉnh" duy nhất còn lại: Frontend chưa nối API thật (mục Login/Register/Dashboard/PasteEditor ở trên) — thuộc phần 2 bạn FE.
+
+### Việc cần làm tiếp theo (chưa làm)
+1. Nối `Login.vue`/`Register.vue`/`Dashboard.vue` vào API thật, lưu JWT token, gắn `Authorization: Bearer` cho các request cần — việc của FE.
+2. Sửa `PasteEditor.vue` gửi đúng field `expiry` thay vì `expiresAt` — việc của FE.
+3. Thêm `.env`/`VITE_API_URL` + proxy rule `/auth/*` (hoặc bỏ hẳn proxy, dùng CORS đã có) — việc của FE.
+4. Team quyết định cách chia sẻ `Jwt:Key` không qua git (thay cho hướng user-secrets hiện đang treo trên `authservice`).
+5. Docker, CI/CD, unit test, README — chưa bắt đầu.
