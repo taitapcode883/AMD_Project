@@ -44,7 +44,15 @@ namespace AuthService.Controllers
             };
 
             _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return Conflict(new { message = "Email đã được sử dụng." });
+            }
 
             var response = new UserResponse
             {
@@ -54,7 +62,7 @@ namespace AuthService.Controllers
                 Role = user.Role
             };
 
-            return CreatedAtAction(nameof(Register), new { id = user.Id }, response);
+            return StatusCode(StatusCodes.Status201Created, response);
         }
 
         // POST: api/Auth/login
