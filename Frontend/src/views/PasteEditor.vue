@@ -137,19 +137,6 @@ export default {
       window.setTimeout(() => { this.notification.show = false; }, 3000);
     },
 
-    getExpiryDate() {
-      const durations = {
-        "10m": 10 * 60 * 1000,
-        "1h": 60 * 60 * 1000,
-        "1d": 24 * 60 * 60 * 1000,
-        "1w": 7 * 24 * 60 * 60 * 1000
-      };
-
-      return this.form.expiry === "never"
-        ? null
-        : new Date(Date.now() + durations[this.form.expiry]).toISOString();
-    },
-
     insertTab(event) {
       const textarea = event.target;
       const start = textarea.selectionStart;
@@ -185,7 +172,7 @@ export default {
             language: this.form.language,
             visibility: this.form.visibility,
             createdAt: new Date().toISOString(),
-            expiresAt: this.getExpiryDate(),
+            expiry: this.form.expiry,
             ownerId: null,
             viewCount: 0
           })
