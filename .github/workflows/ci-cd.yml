@@ -77,6 +77,8 @@ jobs:
           context: .
           file: Frontend/Dockerfile
           push: true
+          build-args: |
+            VITE_API_URL=https://pastebin-apigateway.onrender.com
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-frontend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-frontend:${{ github.sha }}
