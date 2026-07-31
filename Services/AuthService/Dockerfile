@@ -14,6 +14,9 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_URLS=http://+:8080
+# Tắt FileSystemWatcher theo dõi appsettings.json - tránh hết quota inotify
+# trên container giới hạn tài nguyên (đã gặp crash 139 thật trên Render free tier).
+ENV DOTNET_hostBuilder__reloadConfigOnChange=false
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "AuthService.dll"]
