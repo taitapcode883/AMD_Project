@@ -21,6 +21,27 @@ var app = builder.Build();
 
 app.UseCors("Frontend");
 
+// TODO: endpoint debug tạm thời để chẩn đoán lỗi 502 khi gọi downstream trên Render - xóa sau khi xong.
+app.MapGet("/debug/ping-auth", async () =>
+{
+    try
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var resp = await client.GetAsync("https://pastebin-authservice.onrender.com/api/Auth/me");
+        var body = await resp.Content.ReadAsStringAsync();
+        return Results.Ok(new { status = (int)resp.StatusCode, body });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new
+        {
+            errorType = ex.GetType().FullName,
+            message = ex.Message,
+            inner = ex.InnerException?.Message
+        });
+    }
+});
+
 await app.UseOcelot();
 
 app.Run();
