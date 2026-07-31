@@ -7,8 +7,14 @@ export default defineConfig({
     vue(),
     tailwindcss()
   ],
+
   server: {
     proxy: {
+      "/auth": {
+        target: "http://localhost:5179",
+        changeOrigin: true
+      },
+
       "/pastes": {
         target: "http://localhost:5179",
         changeOrigin: true

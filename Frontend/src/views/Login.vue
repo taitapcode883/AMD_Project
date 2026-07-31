@@ -9,7 +9,9 @@
     />
 
     <section class="auth-card">
-      <h1 class="auth-title">Welcome back</h1>
+      <h1 class="auth-title">
+        Welcome back
+      </h1>
 
       <p class="auth-description">
         Login to manage your pastes.
@@ -21,7 +23,9 @@
         @submit.prevent="handleLogin"
       >
         <div class="form-group">
-          <label class="form-label">Email</label>
+          <label class="form-label">
+            Email
+          </label>
 
           <input
             v-model.trim="email"
@@ -32,7 +36,9 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">Password</label>
+          <label class="form-label">
+            Password
+          </label>
 
           <input
             v-model="password"
@@ -45,8 +51,9 @@
         <button
           class="primary-button"
           type="submit"
+          :disabled="loading"
         >
-          Login
+          {{ loading ? "Logging in..." : "Login" }}
         </button>
       </form>
 
@@ -64,6 +71,11 @@
 <script>
 import Notification from "../components/Notification.vue";
 
+import {
+  apiRequest,
+  saveSession
+} from "../services/api.js";
+
 export default {
   name: "Login",
 
@@ -75,18 +87,29 @@ export default {
     return {
       email: "",
       password: "",
+      loading: false,
 
       notification: {
         show: false,
         type: "success",
         title: "",
         message: ""
-      }
+      },
+
+      notificationTimer: null,
+      redirectTimer: null
     };
+  },
+
+  beforeUnmount() {
+    clearTimeout(this.notificationTimer);
+    clearTimeout(this.redirectTimer);
   },
 
   methods: {
     notify(type, title, message) {
+      clearTimeout(this.notificationTimer);
+
       this.notification = {
         show: true,
         type,
@@ -94,12 +117,12 @@ export default {
         message
       };
 
-      setTimeout(() => {
+      this.notificationTimer = setTimeout(() => {
         this.notification.show = false;
       }, 2500);
     },
 
-    handleLogin() {
+    async handleLogin() {
       if (!this.email || !this.password) {
         return this.notify(
           "error",
@@ -108,8 +131,10 @@ export default {
         );
       }
 
+      const email = this.email.trim().toLowerCase();
+
       const validEmail =
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email);
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
       if (!validEmail) {
         return this.notify(
@@ -119,33 +144,51 @@ export default {
         );
       }
 
-      const user = JSON.parse(
-        localStorage.getItem("registeredUser")
-      );
+      try {
+        this.loading = true;
 
-      if (
-        !user ||
-        user.email !== this.email ||
-        user.password !== this.password
-      ) {
-        return this.notify(
+        const response = await apiRequest("/auth/login", {
+          method: "POST",
+
+          body: JSON.stringify({
+            email: email,
+            password: this.password
+          })
+        });
+
+        console.log("Login response:", response);
+
+        if (!response || !response.token) {
+          throw new Error(
+            "Backend did not return a login token."
+          );
+        }
+
+        saveSession(response);
+
+        this.notify(
+          "success",
+          "Login successful",
+          `Welcome back, ${response.user?.username || "User"}.`
+        );
+
+        clearTimeout(this.redirectTimer);
+
+        this.redirectTimer = setTimeout(() => {
+          this.$router.push("/dashboard");
+        }, 1000);
+      } catch (error) {
+        console.error("Login error:", error);
+
+        this.notify(
           "error",
           "Login failed",
-          "Email or password is incorrect."
+          error.message ||
+            "Email or password is incorrect."
         );
+      } finally {
+        this.loading = false;
       }
-
-      localStorage.setItem("isLoggedIn", "true");
-
-      this.notify(
-        "success",
-        "Login successful",
-        "Welcome back."
-      );
-
-      setTimeout(() => {
-        this.$router.push("/dashboard");
-      }, 1000);
     }
   }
 };

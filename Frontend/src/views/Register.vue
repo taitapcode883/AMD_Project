@@ -9,7 +9,9 @@
     />
 
     <section class="auth-card">
-      <h1 class="auth-title">Create account</h1>
+      <h1 class="auth-title">
+        Create account
+      </h1>
 
       <p class="auth-description">
         Register to create and manage your pastes.
@@ -21,7 +23,9 @@
         @submit.prevent="handleRegister"
       >
         <div class="form-group">
-          <label class="form-label">Username</label>
+          <label class="form-label">
+            Username
+          </label>
 
           <input
             v-model.trim="username"
@@ -32,7 +36,9 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">Email</label>
+          <label class="form-label">
+            Email
+          </label>
 
           <input
             v-model.trim="email"
@@ -43,7 +49,9 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">Password</label>
+          <label class="form-label">
+            Password
+          </label>
 
           <input
             v-model="password"
@@ -54,7 +62,9 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">Confirm password</label>
+          <label class="form-label">
+            Confirm password
+          </label>
 
           <input
             v-model="confirmPassword"
@@ -67,8 +77,9 @@
         <button
           class="primary-button"
           type="submit"
+          :disabled="loading"
         >
-          Register
+          {{ loading ? "Registering..." : "Register" }}
         </button>
       </form>
 
@@ -85,6 +96,7 @@
 
 <script>
 import Notification from "../components/Notification.vue";
+import { apiRequest } from "../services/api.js";
 
 export default {
   name: "Register",
@@ -99,18 +111,29 @@ export default {
       email: "",
       password: "",
       confirmPassword: "",
+      loading: false,
 
       notification: {
         show: false,
         type: "success",
         title: "",
         message: ""
-      }
+      },
+
+      notificationTimer: null,
+      redirectTimer: null
     };
+  },
+
+  beforeUnmount() {
+    clearTimeout(this.notificationTimer);
+    clearTimeout(this.redirectTimer);
   },
 
   methods: {
     notify(type, title, message) {
+      clearTimeout(this.notificationTimer);
+
       this.notification = {
         show: true,
         type,
@@ -118,12 +141,12 @@ export default {
         message
       };
 
-      setTimeout(() => {
+      this.notificationTimer = setTimeout(() => {
         this.notification.show = false;
       }, 2500);
     },
 
-    handleRegister() {
+    async handleRegister() {
       if (
         !this.username ||
         !this.email ||
@@ -137,8 +160,10 @@ export default {
         );
       }
 
+      const email = this.email.trim().toLowerCase();
+
       const validEmail =
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email);
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
       if (!validEmail) {
         return this.notify(
@@ -164,26 +189,46 @@ export default {
         );
       }
 
-      const user = {
-        username: this.username,
-        email: this.email,
-        password: this.password
-      };
+      try {
+        this.loading = true;
 
-      localStorage.setItem(
-        "registeredUser",
-        JSON.stringify(user)
-      );
+        const response = await apiRequest(
+          "/auth/register",
+          {
+            method: "POST",
 
-      this.notify(
-        "success",
-        "Registration successful",
-        "Your account has been created."
-      );
+            body: JSON.stringify({
+              username: this.username.trim(),
+              email: email,
+              password: this.password
+            })
+          }
+        );
 
-      setTimeout(() => {
-        this.$router.push("/login");
-      }, 1200);
+        console.log("Register response:", response);
+
+        this.notify(
+          "success",
+          "Registration successful",
+          "Your account has been created."
+        );
+
+        clearTimeout(this.redirectTimer);
+
+        this.redirectTimer = setTimeout(() => {
+          this.$router.push("/login");
+        }, 1200);
+      } catch (error) {
+        console.error("Register error:", error);
+
+        this.notify(
+          "error",
+          "Registration failed",
+          error.message || "Could not create account."
+        );
+      } finally {
+        this.loading = false;
+      }
     }
   }
 };
