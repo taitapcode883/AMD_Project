@@ -105,7 +105,12 @@ dotnet test
 ## Deploy
 
 - Docker images: https://hub.docker.com/u/trungtai8803
-- Live URL: _(đang cập nhật — chưa deploy lên Render)_
+- **Live URL (Frontend):** https://pastebin-frontend-68mk.onrender.com
+- API (qua ApiGateway): https://pastebin-apigateway.onrender.com
+
+Hạ tầng: 4 Web Service (Docker image) + 2 PostgreSQL database, tất cả chạy trên [Render](https://render.com), free tier.
+
+**Lưu ý khi tự deploy lại:** ASP.NET Core mặc định bật `FileSystemWatcher` (dùng `inotify`) để tự reload `appsettings.json`/config khi thay đổi. Trên container giới hạn tài nguyên của Render free tier, quota `inotify` (128) có thể bị dùng hết sau vài lần khởi động lại, gây crash (`exit 139`). Đã tắt qua biến môi trường `DOTNET_hostBuilder__reloadConfigOnChange=false` ở cả 3 Dockerfile backend — nếu tạo thêm service mới từ image khác, nhớ áp dụng tương tự.
 
 ## Cấu trúc thư mục
 
