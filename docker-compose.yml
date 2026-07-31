@@ -1,4 +1,34 @@
 services:
+  postgres-auth:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d authdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  postgres-paste:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pastedb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-paste-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pastedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   authservice:
     build:
       context: .
@@ -6,9 +36,10 @@ services:
     ports:
       - "5279:8080"
     environment:
-      ConnectionStrings__Default: "Data Source=/app/data/auth.db"
-    volumes:
-      - authservice-data:/app/data
+      ConnectionStrings__Default: "Host=postgres-auth;Database=authdb;Username=postgres;Password=postgres"
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
     restart: unless-stopped
 
   pasteservice:
@@ -18,9 +49,10 @@ services:
     ports:
       - "5065:8080"
     environment:
-      ConnectionStrings__Default: "Data Source=/app/data/paste.db"
-    volumes:
-      - pasteservice-data:/app/data
+      ConnectionStrings__Default: "Host=postgres-paste;Database=pastedb;Username=postgres;Password=postgres"
+    depends_on:
+      postgres-paste:
+        condition: service_healthy
     restart: unless-stopped
 
   apigateway:
@@ -47,5 +79,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  authservice-data:
-  pasteservice-data:
+  postgres-auth-data:
+  postgres-paste-data:

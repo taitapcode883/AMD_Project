@@ -22,13 +22,16 @@ Hệ thống gồm 4 thành phần độc lập, giao tiếp qua HTTP:
                   ┌─────────────┐ ┌──────────────┐
                   │ AuthService │ │ PasteService │
                   │   :5279     │ │    :5065     │
-                  │ SQLite      │ │ SQLite       │
-                  │ (auth.db)   │ │ (paste.db)   │
+                  └──────┬──────┘ └──────┬───────┘
+                         ▼               ▼
+                  ┌─────────────┐ ┌──────────────┐
+                  │ PostgreSQL  │ │  PostgreSQL  │
+                  │  (authdb)   │ │  (pastedb)   │
                   └─────────────┘ └──────────────┘
 ```
 
-- **AuthService** — đăng ký/đăng nhập, phát hành JWT (access token + refresh token rotation).
-- **PasteService** — tạo/xem/xoá paste, kiểm tra quyền sở hữu và visibility qua JWT do AuthService ký (không gọi ngược lại AuthService để verify — cả 2 service dùng chung `Jwt:Key`), có background job tự xoá paste hết hạn.
+- **AuthService** — đăng ký/đăng nhập, phát hành JWT (access token + refresh token rotation), lưu vào PostgreSQL riêng (`authdb`).
+- **PasteService** — tạo/xem/xoá paste, kiểm tra quyền sở hữu và visibility qua JWT do AuthService ký (không gọi ngược lại AuthService để verify — cả 2 service dùng chung `Jwt:Key`), có background job tự xoá paste hết hạn, lưu vào PostgreSQL riêng (`pastedb`).
 - **ApiGateway** — điểm vào duy nhất cho Frontend, dùng [Ocelot](https://ocelot.readthedocs.io/) để route `/auth/*` → AuthService, `/pastes*` → PasteService, xử lý CORS cho origin của Frontend.
 - **Frontend** — Vue 3 + Vite, gồm trang đăng nhập/đăng ký, paste editor, trang xem paste, dashboard liệt kê paste của người dùng.
 
@@ -59,14 +62,20 @@ Dừng: `docker compose down` (thêm `-v` nếu muốn xoá luôn dữ liệu SQ
 
 ### Cách 2 — Chạy trực tiếp bằng .NET / Node (khi cần debug từng service)
 
-Yêu cầu: .NET SDK 10, Node.js 20+.
+Yêu cầu: .NET SDK 10, Node.js 20+, PostgreSQL đang chạy (local hoặc container riêng).
 
 ```bash
+# Chạy 2 database (chỉ cần làm 1 lần)
+docker run -d --name pg-auth -e POSTGRES_DB=authdb -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
+docker run -d --name pg-paste -e POSTGRES_DB=pastedb -e POSTGRES_PASSWORD=postgres -p 5433:5432 postgres:16-alpine
+
 # Terminal 1 — AuthService
-cd Services/AuthService && dotnet run
+cd Services/AuthService
+ConnectionStrings__Default="Host=localhost;Database=authdb;Username=postgres;Password=postgres" dotnet run
 
 # Terminal 2 — PasteService
-cd Services/PasteService && dotnet run
+cd Services/PasteService
+ConnectionStrings__Default="Host=localhost;Port=5433;Database=pastedb;Username=postgres;Password=postgres" dotnet run
 
 # Terminal 3 — ApiGateway
 cd ApiGateway && dotnet run
@@ -75,7 +84,7 @@ cd ApiGateway && dotnet run
 cd Frontend && npm install && npm run dev
 ```
 
-Mỗi service tự chạy migration (`Database.Migrate()`) khi khởi động lần đầu, tự tạo file SQLite tương ứng — không cần bước setup DB thủ công.
+Mỗi service tự chạy migration (`Database.Migrate()`) khi khởi động lần đầu, tự tạo schema — không cần bước `dotnet ef database update` thủ công.
 
 ## Chạy test
 

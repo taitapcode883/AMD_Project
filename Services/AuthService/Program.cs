@@ -10,7 +10,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=auth.db"));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")
+        ?? "Host=localhost;Database=authdb;Username=postgres;Password=postgres"));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
