@@ -1,0 +1,51 @@
+services:
+  authservice:
+    build:
+      context: .
+      dockerfile: Services/AuthService/Dockerfile
+    ports:
+      - "5279:8080"
+    environment:
+      ConnectionStrings__Default: "Data Source=/app/data/auth.db"
+    volumes:
+      - authservice-data:/app/data
+    restart: unless-stopped
+
+  pasteservice:
+    build:
+      context: .
+      dockerfile: Services/PasteService/Dockerfile
+    ports:
+      - "5065:8080"
+    environment:
+      ConnectionStrings__Default: "Data Source=/app/data/paste.db"
+    volumes:
+      - pasteservice-data:/app/data
+    restart: unless-stopped
+
+  apigateway:
+    build:
+      context: .
+      dockerfile: ApiGateway/Dockerfile
+    ports:
+      - "5179:8080"
+    depends_on:
+      - authservice
+      - pasteservice
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Frontend/Dockerfile
+      args:
+        VITE_API_URL: "http://localhost:5179"
+    ports:
+      - "5173:80"
+    depends_on:
+      - apigateway
+    restart: unless-stopped
+
+volumes:
+  authservice-data:
+  pasteservice-data:
