@@ -224,3 +224,63 @@ Phát hiện Backend (3 service) đã ổn định, nhưng `Frontend/` mới ch�
 3. Thêm `.env`/`VITE_API_URL` + proxy rule `/auth/*` (hoặc bỏ hẳn proxy, dùng CORS đã có) — việc của FE.
 4. Team quyết định cách chia sẻ `Jwt:Key` không qua git (thay cho hướng user-secrets hiện đang treo trên `authservice`).
 5. Docker, CI/CD, unit test, README — chưa bắt đầu.
+
+---
+
+## 2026-08-01 — Đồng bộ code nhóm, đối chiếu đề bài, unit test, Docker hóa, CI/CD, PostgreSQL, deploy Render, fix bug CRUD Frontend
+
+**Lý do:** Kiểm tra lại toàn bộ code so với `AMD201 - Assignment Brief.docx` (file đề bài nằm sẵn ở gốc repo, chưa đọc kỹ trước đó) để biết còn thiếu gì trước khi nộp bài. Phát hiện thiếu gần hết phần DevOps (Docker, CI/CD, unit test, README, deploy) — đề bài ghi rõ "A non-working or undeployed application cannot score above 4" dù code chạy được, nên đây là việc ưu tiên nhất.
+
+### Đồng bộ code nhóm trước khi bắt đầu
+- `git fetch` thấy `origin/frontend` có thêm 1 commit (`c030e8f`): fix đúng bug đã ghi nhận hôm 2026-07-28 — `PasteEditor.vue` gửi `expiresAt` thay vì `expiry`. Cherry-pick về `paste-service` (`a68f6c5`).
+- Phát hiện nhánh mới `origin/frontend-login` (5 commit) — có `Frontend/src/services/api.js` (fetch wrapper thật, tự gắn JWT), và `Login.vue`/`Register.vue`/`Dashboard.vue` đã nối API thật, đúng thứ đang thiếu theo audit 2026-07-28. Nhưng `PasteController.cs` trên nhánh này còn nguyên conflict marker `<<<<<<<`/`=======`/`>>>>>>>` chưa resolve — không build được.
+- Lấy chọn lọc 6 file Frontend (`api.js`, `Login.vue`, `Register.vue`, `Dashboard.vue`, `router/index.js`, `vite.config.js`) bằng `git checkout <branch> -- <paths>`, loại hẳn `PasteController.cs`. Đối chiếu field JSON của `AuthResponse`/`UserResponse` (backend) với những gì `Login.vue` đọc — khớp chính xác (camelCase mặc định ASP.NET Core). Commit `b31fd80`.
+
+### Unit test cho `PasteController`
+- Xác nhận lại kế hoạch tạm dừng hôm 2026-07-28 (xUnit + EF Core InMemory) trước khi làm, đúng theo thói quen "không giả định đề xuất cũ đã được chấp nhận".
+- Dựng project `Services/PasteService.Tests`, hướng dẫn viết từng bước (helper `CreateContext()` dùng `Guid` làm tên DB ảo riêng mỗi test, helper `SetUser()` giả lập `ClaimsPrincipal` vì gọi controller trực tiếp không qua ASP.NET pipeline nên không tự có `HttpContext`/`User`).
+- Sau khi giải thích xong bước 1, được yêu cầu "làm luôn cho tôi chỉ giải thích chi tiết" — viết trực tiếp 16 test bao phủ `PostPaste`/`GetPaste`/`GetMine`/`DeletePaste` (validate, expiry, private/ownership, view count, xoá ẩn danh). Cả 16 pass ngay lần đầu. Commit `7531a1f`.
+
+### Docker hóa 4 service + docker-compose
+- Dockerfile multi-stage (SDK build → ASP.NET runtime) cho AuthService/PasteService/ApiGateway, Dockerfile 2 stage (node build → nginx) cho Frontend.
+- **Bug tự phát hiện lúc build thử:** thiếu `.dockerignore` khiến `obj/`/`bin/` đã restore trên host bị `COPY` đè lên `obj/` restore trong container → publish lỗi `NETSDK1064`. Thêm `.dockerignore` là fix.
+- **Bug tự phát hiện khác:** `PasteService` chưa từng gọi `Database.Migrate()` lúc khởi động (AuthService có từ lâu) — vì `*.db` bị gitignore nên container/máy mới clone sẽ crash ngay khi gọi API do bảng chưa tồn tại. Thêm gọi `Database.Migrate()` giống AuthService.
+- `docker-compose.yml`: build cả 4 service, volume riêng cho từng DB. Build + chạy thử thật bằng `docker compose up`, test full flow qua `curl` (register → login → tạo paste → GetMine) xác nhận chạy đúng trước khi commit. Commit `d01b8a8`.
+
+### GitHub Actions CI/CD
+- `.github/workflows/ci-cd.yml`: job `test` (dotnet test) → job `docker` (build + push 4 image lên Docker Hub, tag `latest` + SHA) → job `deploy` (gọi Render Deploy Hook, tự skip nếu secret rỗng).
+- Chạy thử thật, phát hiện lỗi `unauthorized: access token has insufficient scopes` — token Docker Hub lưu trong secret bị tạo với quyền Read-only thay vì Read & Write. Tạo lại token đúng quyền, update secret, chạy lại pass. Commit `5a5926e`.
+- Đẩy 4 image lên Docker Hub (`trungtai8803/pastebin-{authservice,pasteservice,apigateway,frontend}`) thủ công lần đầu qua `docker login`/`tag`/`push`.
+
+### Chuyển SQLite → PostgreSQL
+- Cả AuthService lẫn PasteService trước đó dùng SQLite (đề bài yêu cầu SQL Server hoặc PostgreSQL), còn cài dư package `EntityFrameworkCore.SqlServer` chưa từng dùng.
+- Đổi sang `Npgsql.EntityFrameworkCore.PostgreSQL`, xoá migration cũ (không tương thích schema Postgres), tạo migration `InitialCreate` mới cho cả 2 service, verify bằng cách chạy thật vào 2 container Postgres tạm (`docker run postgres:16-alpine`) — xác nhận đúng unique index `Email`, FK `RefreshTokens → Users` cascade, cột `DateTime` map đúng `timestamp with time zone`.
+- Thêm 2 service `postgres-auth`/`postgres-paste` vào `docker-compose.yml` (đúng kiểu database-per-service), connection string đọc qua `ConnectionStrings:Default` (fallback về giá trị cũ nếu không set). Test full flow qua Postgres thật (kể cả `409 Conflict` khi trùng email) trước khi commit `85501a0`.
+
+### README.md
+- Mô tả project, sơ đồ kiến trúc ASCII, hướng dẫn chạy bằng `docker compose` hoặc `dotnet run`/`npm run dev`, cách chạy test, tóm tắt pipeline CI/CD. Commit `5f2bec9`, cập nhật lại link deploy thật ở cuối buổi (`0e33b4d`).
+
+### Deploy lên Render — phần tốn thời gian nhất, 4 lỗi thật phải debug
+- **Free tier chỉ cho 1 Postgres/account.** Tạo `pastedb` bằng cách connect vào server Postgres free đã có (`authdb_ls4q`) qua `psql` rồi `CREATE DATABASE pastedb;` thủ công — không cần trả phí, vẫn giữ đúng kiến trúc "mỗi service 1 database", chỉ là chung 1 server vật lý.
+- **AuthService crash lặp lại** ngay sau khi Render "tự phát hiện port 8080 rồi restart để cập nhật cấu hình mạng" — restart đó thất bại vì hết quota `inotify` (xem mục dưới), nhưng fix tức thời là set biến môi trường `PORT=8080` (Render không cần tự dò port nữa) — áp dụng cho cả 4 service (`PORT=80` riêng cho Frontend vì nginx nghe cổng khác).
+- **Gateway gọi downstream nội bộ Render bị `502` fail nhanh** (dùng tên service kiểu `pastebin-authservice:8080` theo docs Render private networking) — không xác định được nguyên nhân chính xác dù đã thử nhiều cách; đổi sang gọi qua **URL công khai HTTPS** của AuthService/PasteService (đã verify từng service tự hoạt động đúng qua URL riêng) — hoạt động ngay.
+- **Nguyên nhân gốc thật sự của toàn bộ các lần crash `exit 139`:** ASP.NET Core mặc định bật `FileSystemWatcher` (dùng `inotify` của Linux) để tự reload `appsettings.json`, ApiGateway còn tự thêm 2 watcher nữa cho `ocelot.json`/`ocelot.{Env}.json`. Container Render free tier giới hạn tài nguyên, quota `inotify` (128) hết sau vài lần restart → `System.IO.IOException: configured user limit (128) on inotify instances reached` → exit 139, Render tự restart liên tục càng làm cạn quota nhanh hơn. Chẩn đoán bằng cách thêm tạm 1 endpoint debug (`/debug/ping-auth`, đã xoá sau khi xong) tự gọi HttpClient để lộ lỗi thật, kết hợp đọc kỹ log Render (thấy `Unhandled exception` + `Exited with status 139` ngay sau dòng "New primary port detected... Restarting"). **Fix:** `ENV DOTNET_hostBuilder__reloadConfigOnChange=false` ở cả 3 Dockerfile backend + `reloadOnChange: false` cho 2 lệnh `AddJsonFile` trong `ApiGateway/Program.cs`. Sau fix, cả 3 service live ổn định, gọi qua Gateway trả `201`/`200` đúng.
+- **CORS sai domain:** Render tự thêm hậu tố ngẫu nhiên `-68mk` vào URL Frontend vì tên `pastebin-frontend` bị trùng toàn cục trên Render (URL phải duy nhất toàn hệ thống, không chỉ trong 1 account). Cập nhật lại CORS đúng `https://pastebin-frontend-68mk.onrender.com`.
+- Verify cuối cùng bằng flow thật qua domain production: `register` → `login` → tạo paste private → `GetMine` → CORS preflight đúng origin thật. Tất cả `201`/`200`/`204` đúng như kỳ vọng. Commit các bước: `3e088e4`, `8a850df` (debug tạm), `d543157` (fix inotify), `b01e3bf` (fix CORS + xoá debug).
+
+### Bug lớn phát hiện lúc user tự test: `PasteEditor.vue` không gắn JWT token
+- User tự test trên trang live, báo "tạo được nhưng không xoá được, reload mất hết".
+- Nguyên nhân: `PasteEditor.vue` (trang tạo paste) vẫn dùng `fetch()` trần thay vì `apiRequest()` — không gắn header `Authorization`. Mọi paste tạo qua UI đều thành ẩn danh (`OwnerId: null`) dù đang đăng nhập → không bao giờ hiện trong `GetMine` (Dashboard) → không có nút Delete nào để bấm vì paste không nằm trong danh sách. File này không nằm trong 6 file đã lấy từ `frontend-login` hôm đầu buổi nên bị bỏ sót.
+- Sửa `PasteEditor.vue` dùng `apiRequest()` giống các trang khác. Đồng thời phát hiện và sửa luôn `PasteView.vue` (trang xem lại paste) có lỗi tương tự — dùng `fetch` trần nên xem paste **private** của chính mình sẽ bị `401` và hiển thị nhầm thành "service unavailable" thay vì phân biệt rõ 404 (không tồn tại) vs 401/403 (private, cần đăng nhập đúng chủ).
+- Verify lại bằng flow thật cả local (docker-compose) lẫn production Render: tạo paste private khi đã login → `ownerId` gán đúng → hiện trong `GetMine` → xem lại được → xoá được (`204`) → biến mất khỏi `GetMine`. Commit `134cdf0`.
+
+### Trạng thái cuối ngày
+- **App đang chạy live thật** tại https://pastebin-frontend-68mk.onrender.com (API qua Gateway: https://pastebin-apigateway.onrender.com), verify end-to-end đầy đủ qua cả curl lẫn (đang chờ) test tay trên trình duyệt.
+- Đối chiếu rubric: unit test ✅, Docker ✅, CI/CD (test+build+push tự động) ✅, PostgreSQL ✅, README ✅, deploy thật ✅ — hết bị chặn điểm dưới 4.
+- Docker Hub: `hub.docker.com/u/trungtai8803`, image `trungtai8803/pastebin-{authservice,pasteservice,apigateway,frontend}:latest`.
+
+### Việc cần làm tiếp theo (chưa làm)
+1. Lấy Render Deploy Hook cho cả 4 service, lưu thành 4 GitHub secret (`RENDER_DEPLOY_HOOK_AUTH/PASTE/GATEWAY/FRONTEND`) để job `deploy` trong CI tự chạy — hiện vẫn phải tự bấm "Manual Deploy" trên Render sau mỗi lần push. Đang làm dở, dừng lại giữa chừng vì phát hiện bug CRUD ở trên.
+2. Merge `paste-service` vào `main` — đề bài yêu cầu CI/CD chạy "on every push to main", hiện `main` vẫn là bản scaffold cũ chưa merge.
+3. User đang tự test tay trên trình duyệt theo 6 kịch bản (đăng ký/đăng nhập, tạo paste đủ biến thể, Dashboard, view counter, hết hạn tự động, đăng xuất/bảo mật) — chưa có kết quả.
+4. Merit/Distinction (không bắt buộc): syntax highlighting (highlight.js/Prism), diff viewer, public paste feed có pagination — chưa làm.
