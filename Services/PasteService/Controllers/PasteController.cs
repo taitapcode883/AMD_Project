@@ -87,6 +87,7 @@ namespace PasteService.Controllers
             }
             DateTime? expiresAt = request.Expiry switch
             {
+                "10m" => DateTime.UtcNow.AddMinutes(10),
                 "1h" => DateTime.UtcNow.AddHours(1),
                 "1d" => DateTime.UtcNow.AddDays(1),
                 "1w" => DateTime.UtcNow.AddDays(7),
