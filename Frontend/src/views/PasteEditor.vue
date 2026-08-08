@@ -169,7 +169,10 @@ export default {
             content: this.form.content,
             language: this.form.language,
             visibility: this.form.visibility,
-            expiry: this.form.expiry
+            createdAt: new Date().toISOString(),
+            expiry: this.form.expiry,
+            ownerId: null,
+            viewCount: 0
           })
         });
 
