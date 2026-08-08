@@ -42,6 +42,7 @@
 
 <script>
 import Navbar from "./components/Navbar.vue";
+import { clearSession } from "./services/api.js";
 
 export default {
   name: "App",
@@ -72,12 +73,10 @@ export default {
     },
 
     logout() {
-      localStorage.removeItem("isLoggedIn");
-      localStorage.removeItem("userEmail");
-
-      this.sidebarOpen = false;
-      this.$router.push("/login");
-    }
+  clearSession();
+  this.sidebarOpen = false;
+  this.$router.push("/login");
+  }
   }
 };
 </script>

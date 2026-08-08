@@ -37,6 +37,14 @@
         </router-link>
 
         <router-link
+          to="/paste-view"
+          class="sidebar-link"
+          @click="$emit('close-sidebar')"
+        >
+          View paste
+          </router-link>
+        
+                  <router-link
           to="/dashboard"
           class="sidebar-link"
           @click="$emit('close-sidebar')"

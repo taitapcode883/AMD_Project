@@ -2,7 +2,7 @@
 bin/
 obj/
 
-# SQLite databases (mỗi máy tự sinh qua migration, không commit data)
+# SQLite databases
 *.db
 *.db-shm
 *.db-wal
@@ -11,13 +11,24 @@ obj/
 .vs/
 .vscode/
 *.user
+*.suo
 
 # Node / Frontend
 node_modules/
 Frontend/dist/
+dist/
 
-# macOS
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# macOS / Windows
 .DS_Store
+Thumbs.db
 
 # Claude Code local settings
 .claude/
