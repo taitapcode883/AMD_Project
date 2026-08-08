@@ -74,8 +74,7 @@
 
 <script>
 import Notification from "../components/Notification.vue";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+import { apiRequest } from "../services/api.js";
 
 export default {
   name: "PasteView",
@@ -125,21 +124,25 @@ export default {
       this.errorMessage = "";
 
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/pastes/${encodeURIComponent(this.$route.params.code)}`
+        const data = await apiRequest(
+          `/pastes/${encodeURIComponent(this.$route.params.code)}`
         );
 
-        if (response.status === 404) throw new Error("This paste does not exist or has expired.");
-        if (!response.ok) throw new Error("The paste service is currently unavailable.");
-
-        this.paste = this.normalizePaste(await response.json());
+        this.paste = this.normalizePaste(data);
 
         if (this.paste.expiresAt && new Date(this.paste.expiresAt) <= new Date()) {
           throw new Error("This paste has expired.");
         }
       } catch (error) {
         this.paste = null;
-        this.errorMessage = error.message || "Unable to load this paste.";
+
+        if (error.status === 404) {
+          this.errorMessage = "This paste does not exist or has expired.";
+        } else if (error.status === 401 || error.status === 403) {
+          this.errorMessage = "This paste is private. Log in as its owner to view it.";
+        } else {
+          this.errorMessage = error.message || "Unable to load this paste.";
+        }
       } finally {
         this.isLoading = false;
       }

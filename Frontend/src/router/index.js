@@ -1,7 +1,4 @@
-import {
-  createRouter,
-  createWebHistory
-} from "vue-router";
+import { createRouter, createWebHistory } from "vue-router";
 
 import Login from "../views/Login.vue";
 import Register from "../views/Register.vue";
@@ -10,10 +7,6 @@ import PasteEditor from "../views/PasteEditor.vue";
 import PasteView from "../views/PasteView.vue";
 
 const routes = [
-  {
-    path: "/",
-    redirect: "/login"
-  },
   {
     path: "/login",
     name: "Login",
@@ -27,12 +20,18 @@ const routes = [
   {
     path: "/dashboard",
     name: "Dashboard",
-    component: Dashboard
+    component: Dashboard,
+    meta: {
+      requiresAuth: true
+    }
   },
   {
     path: "/paste/new",
     name: "PasteEditor",
-    component: PasteEditor
+    component: PasteEditor,
+    meta: {
+      requiresAuth: true
+    }
   },
   {
     path: "/paste/:code",
@@ -40,14 +39,25 @@ const routes = [
     component: PasteView
   },
   {
-    path: "/:pathMatch(.*)*",
-    redirect: "/login"
+    path: "/",
+    redirect: "/dashboard"
   }
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+});
+
+
+router.beforeEach((to) => {
+  const token = localStorage.getItem("token");
+
+  if (to.meta.requiresAuth && !token) {
+    return "/login";
+  }
+
+  return true;
 });
 
 export default router;

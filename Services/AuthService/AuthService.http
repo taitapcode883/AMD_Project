@@ -1,6 +1,53 @@
 @AuthService_HostAddress = http://localhost:5279
 
-GET {{AuthService_HostAddress}}/weatherforecast/
-Accept: application/json
+### 1. Đăng ký tài khoản mới
+POST {{AuthService_HostAddress}}/api/Auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "Password123!"
+}
+
+### 2. Đăng nhập - copy "token" và "refreshToken" trong response để dùng bên dưới
+POST {{AuthService_HostAddress}}/api/Auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Password123!"
+}
+
+### 3. Gọi endpoint được bảo vệ bằng access token -> 200 OK nghĩa là "đang đăng nhập"
+GET {{AuthService_HostAddress}}/api/Auth/me
+Authorization: Bearer PASTE_ACCESS_TOKEN_HERE
+
+### 4. Lấy access token mới bằng refresh token (rotation: refresh token cũ bị thu hồi, trả về refresh token mới)
+POST {{AuthService_HostAddress}}/api/Auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "PASTE_REFRESH_TOKEN_HERE"
+}
+
+### 5. Logout thật sự -> thu hồi refresh token trong DB
+POST {{AuthService_HostAddress}}/api/Auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "PASTE_REFRESH_TOKEN_HERE"
+}
+
+### 6. Dùng lại refresh token vừa logout để refresh -> phải trả về 401 Unauthorized
+POST {{AuthService_HostAddress}}/api/Auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "PASTE_REFRESH_TOKEN_HERE"
+}
+
+### 7. Gọi lại /me không kèm token -> 401 Unauthorized
+GET {{AuthService_HostAddress}}/api/Auth/me
 
 ###

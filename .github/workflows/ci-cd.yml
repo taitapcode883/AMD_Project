@@ -1,0 +1,115 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, paste-service]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build & unit test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore Services/PasteService.Tests/PasteService.Tests.csproj
+
+      - name: Build
+        run: dotnet build Services/PasteService.Tests/PasteService.Tests.csproj --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test Services/PasteService.Tests/PasteService.Tests.csproj --no-build --configuration Release --logger "console;verbosity=normal"
+
+  docker:
+    name: Build & push Docker images
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & push AuthService
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Services/AuthService/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-authservice:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-authservice:${{ github.sha }}
+
+      - name: Build & push PasteService
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Services/PasteService/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-pasteservice:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-pasteservice:${{ github.sha }}
+
+      - name: Build & push ApiGateway
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ApiGateway/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-apigateway:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-apigateway:${{ github.sha }}
+
+      - name: Build & push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Frontend/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=https://pastebin-apigateway.onrender.com
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/pastebin-frontend:${{ github.sha }}
+
+  deploy:
+    name: Deploy to Render
+    needs: docker
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Render Deploy Hook: mỗi service trên Render có 1 URL riêng
+    # (Settings -> Deploy Hook trong dashboard Render), lưu làm secret.
+    # Chưa tạo service trên Render thì các secret này rỗng -> mỗi step
+    # tự bỏ qua (if rỗng), không chặn job docker (đã build/push xong việc).
+    env:
+      RENDER_DEPLOY_HOOK_AUTH: ${{ secrets.RENDER_DEPLOY_HOOK_AUTH }}
+      RENDER_DEPLOY_HOOK_PASTE: ${{ secrets.RENDER_DEPLOY_HOOK_PASTE }}
+      RENDER_DEPLOY_HOOK_GATEWAY: ${{ secrets.RENDER_DEPLOY_HOOK_GATEWAY }}
+      RENDER_DEPLOY_HOOK_FRONTEND: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
+    steps:
+      - name: Trigger AuthService deploy
+        if: env.RENDER_DEPLOY_HOOK_AUTH != ''
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_AUTH"
+
+      - name: Trigger PasteService deploy
+        if: env.RENDER_DEPLOY_HOOK_PASTE != ''
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_PASTE"
+
+      - name: Trigger ApiGateway deploy
+        if: env.RENDER_DEPLOY_HOOK_GATEWAY != ''
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_GATEWAY"
+
+      - name: Trigger Frontend deploy
+        if: env.RENDER_DEPLOY_HOOK_FRONTEND != ''
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_FRONTEND"

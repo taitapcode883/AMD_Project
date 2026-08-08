@@ -1,7 +1,4 @@
 {
-    "GlobalConfiguration": {
-        "BaseUrl": "http://localhost:5179"
-    },
     "Routes": [
         {
             "UpstreamPathTemplate": "/auth/register",
@@ -9,7 +6,7 @@
             "DownstreamPathTemplate": "/api/Auth/register",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5279 }
+                { "Host": "authservice", "Port": 8080 }
             ]
         },
         {
@@ -18,7 +15,7 @@
             "DownstreamPathTemplate": "/api/Auth/login",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5279 }
+                { "Host": "authservice", "Port": 8080 }
             ]
         },
         {
@@ -27,25 +24,25 @@
             "DownstreamPathTemplate": "/api/Auth/refresh",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5279 }
+                { "Host": "authservice", "Port": 8080 }
             ]
         },
-                {
+        {
             "UpstreamPathTemplate": "/auth/logout",
             "UpstreamHttpMethod": [ "Post" ],
             "DownstreamPathTemplate": "/api/Auth/logout",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5279 }
+                { "Host": "authservice", "Port": 8080 }
             ]
         },
-                {
+        {
             "UpstreamPathTemplate": "/auth/me",
             "UpstreamHttpMethod": [ "Get" ],
             "DownstreamPathTemplate": "/api/Auth/me",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5279 }
+                { "Host": "authservice", "Port": 8080 }
             ]
         },
         {
@@ -54,7 +51,7 @@
             "DownstreamPathTemplate": "/api/Paste",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5065 }
+                { "Host": "pasteservice", "Port": 8080 }
             ]
         },
         {
@@ -63,7 +60,7 @@
             "DownstreamPathTemplate": "/api/Paste/mine",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5065 }
+                { "Host": "pasteservice", "Port": 8080 }
             ]
         },
         {
@@ -72,7 +69,7 @@
             "DownstreamPathTemplate": "/api/Paste/{code}",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5065 }
+                { "Host": "pasteservice", "Port": 8080 }
             ]
         },
         {
@@ -81,7 +78,7 @@
             "DownstreamPathTemplate": "/api/Paste/{code}",
             "DownstreamScheme": "http",
             "DownstreamHostAndPorts": [
-                { "Host": "localhost", "Port": 5065 }
+                { "Host": "pasteservice", "Port": 8080 }
             ]
         }
     ]
