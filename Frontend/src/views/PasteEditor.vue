@@ -85,8 +85,8 @@
 
 <script>
 import Notification from "../components/Notification.vue";
+import { apiRequest } from "../services/api.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 const MAX_CONTENT_SIZE = 500 * 1024;
 
 export default {
@@ -176,24 +176,19 @@ export default {
       this.isSubmitting = true;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/pastes`, {
+        const paste = await apiRequest("/pastes", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            code: "",
             content: this.form.content,
             language: this.form.language,
             visibility: this.form.visibility,
             createdAt: new Date().toISOString(),
-            expiresAt: this.getExpiryDate(),
+            expiry: this.form.expiry,
             ownerId: null,
             viewCount: 0
           })
         });
 
-        if (!response.ok) throw new Error(`Request failed (${response.status})`);
-
-        const paste = await response.json();
         const code = paste.code || paste.Code;
         const id = paste.id || paste.Id;
 
@@ -203,7 +198,7 @@ export default {
         this.notify(
           "error",
           "Could not create paste",
-          "Check that the API Gateway is running on port 5179."
+          error.message || "Check that the API Gateway is running."
         );
       } finally {
         this.isSubmitting = false;

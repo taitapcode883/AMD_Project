@@ -129,6 +129,9 @@
     @apply flex w-full items-center justify-center rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white shadow-md hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-950;
   }
 
+  .error-message {
+    @apply rounded-lg border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300;
+  }
 
   .auth-footer {
     @apply mt-6 text-center text-sm text-slate-400;
@@ -181,6 +184,9 @@
     transform: translateX(0);
   }
 
+  .sidebar-overlay {
+    @apply fixed inset-0 z-40 bg-black/60;
+  }
 
   .sidebar-header {
     @apply mb-8 flex items-center justify-between;

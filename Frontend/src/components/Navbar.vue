@@ -1,5 +1,6 @@
 <template>
   <div>
+
     <aside
       class="sidebar"
       :class="{ 'sidebar-open': isOpen }"
@@ -41,6 +42,14 @@
           @click="$emit('close-sidebar')"
         >
           View paste
+          </router-link>
+        
+                  <router-link
+          to="/dashboard"
+          class="sidebar-link"
+          @click="$emit('close-sidebar')"
+        >
+          My pastes
         </router-link>
       </nav>
     </aside>

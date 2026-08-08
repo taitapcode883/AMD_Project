@@ -1,113 +1,3 @@
-<<<<<<< HEAD
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using PasteService.Data;
-using PasteService.Models;
-
-namespace PasteService.Controllers
-{
-    [Route("api/[controller]")]
-    [ApiController]
-    public class PasteController : ControllerBase
-    {
-        private readonly AppDbContext _context;
-
-        public PasteController(AppDbContext context)
-        {
-            _context = context;
-        }
-
-        // GET: api/Paste
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Paste>>> GetPastes()
-        {
-            return await _context.Pastes.ToListAsync();
-        }
-
-        // GET: api/Paste/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Paste>> GetPaste(int id)
-        {
-            var paste = await _context.Pastes.FindAsync(id);
-
-            if (paste == null)
-            {
-                return NotFound();
-            }
-
-            return paste;
-        }
-
-        // PUT: api/Paste/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutPaste(int id, Paste paste)
-        {
-            if (id != paste.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(paste).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!PasteExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
-        // POST: api/Paste
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Paste>> PostPaste(Paste paste)
-        {
-            _context.Pastes.Add(paste);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetPaste", new { id = paste.Id }, paste);
-        }
-
-        // DELETE: api/Paste/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeletePaste(int id)
-        {
-            var paste = await _context.Pastes.FindAsync(id);
-            if (paste == null)
-            {
-                return NotFound();
-            }
-
-            _context.Pastes.Remove(paste);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool PasteExists(int id)
-        {
-            return _context.Pastes.Any(e => e.Id == id);
-        }
-    }
-}
-=======
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -197,6 +87,7 @@ namespace PasteService.Controllers
             }
             DateTime? expiresAt = request.Expiry switch
             {
+                "10m" => DateTime.UtcNow.AddMinutes(10),
                 "1h" => DateTime.UtcNow.AddHours(1),
                 "1d" => DateTime.UtcNow.AddDays(1),
                 "1w" => DateTime.UtcNow.AddDays(7),
@@ -284,5 +175,3 @@ namespace PasteService.Controllers
     }
 }
 
-
->>>>>>> 5fc9dc6 (Update frontend and paste service)

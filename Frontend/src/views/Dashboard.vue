@@ -90,7 +90,7 @@
           v-else-if="filteredPastes.length === 0"
           class="empty-state"
         >
-          You do not have any pastes yet.
+          {{ searchText ? "No pastes match your search." : "You do not have any pastes yet." }}
         </div>
 
         <div
@@ -121,7 +121,7 @@
                   </p>
 
                   <span class="paste-code">
-                    /p/{{ paste.code }}
+                    /paste/{{ paste.code }}
                   </span>
                 </td>
 

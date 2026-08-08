@@ -1,0 +1,130 @@
+{
+    "Routes": [
+        {
+            "UpstreamPathTemplate": "/auth/register",
+            "UpstreamHttpMethod": [
+                "Post"
+            ],
+            "DownstreamPathTemplate": "/api/Auth/register",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-authservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/auth/login",
+            "UpstreamHttpMethod": [
+                "Post"
+            ],
+            "DownstreamPathTemplate": "/api/Auth/login",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-authservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/auth/refresh",
+            "UpstreamHttpMethod": [
+                "Post"
+            ],
+            "DownstreamPathTemplate": "/api/Auth/refresh",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-authservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/auth/logout",
+            "UpstreamHttpMethod": [
+                "Post"
+            ],
+            "DownstreamPathTemplate": "/api/Auth/logout",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-authservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/auth/me",
+            "UpstreamHttpMethod": [
+                "Get"
+            ],
+            "DownstreamPathTemplate": "/api/Auth/me",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-authservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/pastes",
+            "UpstreamHttpMethod": [
+                "Post"
+            ],
+            "DownstreamPathTemplate": "/api/Paste",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-pasteservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/pastes/mine",
+            "UpstreamHttpMethod": [
+                "Get"
+            ],
+            "DownstreamPathTemplate": "/api/Paste/mine",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-pasteservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/pastes/{code}",
+            "UpstreamHttpMethod": [
+                "Get"
+            ],
+            "DownstreamPathTemplate": "/api/Paste/{code}",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-pasteservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        },
+        {
+            "UpstreamPathTemplate": "/pastes/{code}",
+            "UpstreamHttpMethod": [
+                "Delete"
+            ],
+            "DownstreamPathTemplate": "/api/Paste/{code}",
+            "DownstreamScheme": "https",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "pastebin-pasteservice.onrender.com",
+                    "Port": 443
+                }
+            ]
+        }
+    ]
+}
