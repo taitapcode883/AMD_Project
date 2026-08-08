@@ -1,4 +1,4 @@
-<template>
+<template> 
   <main class="paste-page">
     <Notification
       :show="notification.show"
